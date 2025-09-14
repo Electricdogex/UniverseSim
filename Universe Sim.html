@@ -1,1 +1,222 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Universe Sim — Turn‑Based</title>
+  <meta name="description" content="Emergent, non-scripted evolution & civilization toy. Each turn advances time; every run is unique."/>
+  <style>
+    :root{
+      --bg:#0b0f14;--panel:#111821;--muted:#9fb3c8;--text:#e6eef7;--accent:#7bd8ff;--accent2:#ffc66d;--good:#82ffa1;--warn:#ffb870;--bad:#ff7a8a;
+      --card:#0e141c;--border:#1f2a36;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{margin:0;background:radial-gradient(1000px 600px at 25% -10%, #1a2330 0%, transparent 60%), var(--bg); color:var(--text); font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,"Helvetica Neue",Arial,sans-serif;}
+    header{position:sticky;top:0;z-index:5;background:linear-gradient(180deg, rgba(11,15,20,.95), rgba(11,15,20,.75));backdrop-filter: blur(6px);border-bottom:1px solid var(--border)}
+    .wrap{max-width:1200px;margin:0 auto;padding:14px 16px}
+    h1{font-size:20px;margin:0;letter-spacing:.4px}
+    .controls{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:10px}
+    button{background:linear-gradient(180deg,#1b2a3a,#101826);border:1px solid var(--border);color:var(--text);padding:8px 12px;border-radius:12px;cursor:pointer;font-weight:600}
+    button:hover{filter:brightness(1.05)}
+    button.primary{background:linear-gradient(180deg,#1f3b54,#132538);border-color:#2b4a69}
+    button.danger{background:linear-gradient(180deg,#3a1b1b,#261014);border-color:#4a2b2b}
+    input,select{background:#0c1219;border:1px solid var(--border);color:var(--text);padding:8px 10px;border-radius:10px}
+    .grid{display:grid;grid-template-columns:300px 1fr;gap:14px;margin:16px auto;align-items:start}
+    @media (max-width:900px){.grid{grid-template-columns:1fr}}
+    .card{background:var(--card);border:1px solid var(--border);border-radius:16px;box-shadow:0 6px 24px rgba(0,0,0,.25)}
+    .card .hd{padding:12px 14px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center}
+    .card .bd{padding:12px 14px}
+    .kv{display:grid;grid-template-columns:auto 1fr;gap:6px 12px;font-size:14px}
+    .kv b{color:var(--muted);font-weight:600}
+    .bar{height:8px;background:#0d131b;border-radius:6px;border:1px solid var(--border);overflow:hidden}
+    .bar>i{display:block;height:100%;background:linear-gradient(90deg, var(--accent), var(--accent2));}
+    .mono{font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;}
+    .log{height:360px;overflow:auto;padding-right:4px}
+    .log p{margin:6px 0;padding:6px 8px;background:rgba(255,255,255,0.02);border:1px solid var(--border);border-radius:10px}
+    .muted{color:var(--muted)}
+    .pill{display:inline-block;padding:2px 8px;border-radius:999px;border:1px solid var(--border);background:#0b1218;margin-left:8px;font-size:12px}
+    footer{opacity:.7}
+    .badge{display:inline-block;background:#0f1822;border:1px solid var(--border);padding:2px 8px;border-radius:999px;margin:0 4px}
+  </style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+      <h1>Universe Sim — Turn‑Based</h1>
+      <div class="controls">
+        <button id="btnStart" class="primary">▶ Start</button>
+        <button id="btnPause">⏸ Pause</button>
+        <button id="btnStep">⏭ Step (1 turn)</button>
+        <button id="btnReset" class="danger">⟲ Reset</button>
+        <label class="mono">Seed <input id="seedInput" class="mono" placeholder="(auto)" style="width:140px"/></label>
+        <label title="Each turn advances automatically every 5 seconds."><input id="autoChk" type="checkbox" checked> Auto‑advance (5s/turn)</label>
+      </div>
+    </div>
+  </div>
+</header>
 
+<main class="wrap">
+  <div class="grid">
+    <section class="card" id="left">
+      <div class="hd"><strong>System Overview</strong><span class="pill" id="turnLabel">Turn 0</span></div>
+      <div class="bd">
+        <div class="kv" id="sysKV"></div>
+        <div style="margin-top:12px">
+          <div class="muted" style="margin-bottom:6px">Focus Planet Habitability</div>
+          <div class="bar"><i id="habitBar" style="width:0%"></i></div>
+        </div>
+        <div style="margin-top:12px" id="focusKV" class="kv"></div>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="hd"><strong>Timeline</strong><span class="muted mono" id="ageLabel"></span></div>
+      <div class="bd log" id="log"></div>
+    </section>
+
+    <section class="card">
+      <div class="hd"><strong>Leading Civilization</strong><span class="badge" id="civStage">—</span></div>
+      <div class="bd" id="civKV" class="kv"></div>
+    </section>
+
+    <section class="card">
+      <div class="hd"><strong>Tips</strong></div>
+      <div class="bd">
+        <ul>
+          <li>Every run is different by default (seeded from secure randomness). Enter a seed to replay a cool universe.</li>
+          <li>Auto‑advance runs one turn every 5 seconds. Use <em>Step</em> for turn‑by‑turn play.</li>
+          <li>Nothing is scripted. Planets throw stochastic events; species evolve, split, and die; culture/tech jumps are emergent.</li>
+        </ul>
+      </div>
+    </section>
+  </div>
+  <footer class="muted" style="margin:18px 0">Made for GitHub Pages. Single‑file, no dependencies.</footer>
+</main>
+
+<script>
+// ----------- Seedable RNG (Mulberry32) + crypto fallback -------------
+function mulberry32(a){return function(){let t=a+=0x6D2B79F5;t=Math.imul(t^t>>>15,t|1);t^=t+Math.imul(t^t>>>7,t|61);return ((t^t>>>14)>>>0)/4294967296}}
+function autoSeed(){if (window.crypto && crypto.getRandomValues){const b=new Uint32Array(1);crypto.getRandomValues(b);return b[0]>>>0}return Math.floor(Math.random()*2**32)>>>0}
+
+// ----------------------- Utility functions ---------------------------
+const clamp=(x,lo,hi)=>Math.max(lo,Math.min(hi,x));
+const lerp=(a,b,t)=>a+(b-a)*t;
+function randName(rng){const STAR_NAMES="Aurelia,Boreal,Caldera,Doradus,Elys,Fornax,Galea,Helion,Ignis,Janus,Kalix,Lumen,Meridian,Nadir,Onyx,Pavo,Quanta,Rhea,Scuti,Thalassa,Umbra,Vesper,Wyvern,Xanthe,Yedra,Zeph".split(",");
+  const a=STAR_NAMES[Math.floor(rng()*STAR_NAMES.length)], b=String.fromCharCode(97+Math.floor(rng()*26));
+  return `${a}-${1+Math.floor(rng()*999)}${b}`;}
+function randomUnit(rng){return Math.tanh(normRand(rng,0,1))*0.5+0.5}
+function normRand(rng,mu=0,sd=1){ // Box-Muller
+  let u=0,v=0; while(u===0)u=rng(); while(v===0)v=rng();
+  return mu + sd*Math.sqrt(-2.0*Math.log(u))*Math.cos(2*Math.PI*v);
+}
+function chooseWeighted(rng, pairs){const total=pairs.reduce((s,[w])=>s+w,0);let r=rng()*total,acc=0;for(const [w,label] of pairs){acc+=w;if(r<=acc) return label}return pairs[pairs.length-1][1];}
+function jitter(rng,p,scale=0.05){return clamp(p + (rng()*2-1)*scale,0,1)}
+
+// --------------------------- World Model -----------------------------
+class Planet{
+  constructor(rng,i,bias){
+    const mass=clamp(normRand(rng,0.5,0.25),0,1);
+    const orbit=clamp(normRand(rng,0.5,0.25),0,1);
+    const temp=clamp(1-Math.abs(orbit-0.5)*2 + normRand(rng,0,0.12),0,1);
+    const water=clamp(normRand(rng,(Math.abs(orbit-0.5)<0.15)?0.6:0.25,0.25),0,1);
+    const atmosphere=clamp(normRand(rng,0.55,0.3)+(mass-0.5)*0.3,0,1);
+    const volcanism=clamp(normRand(rng,0.45,0.3),0,1);
+    const metals=clamp(normRand(rng,0.5,0.3),0,1);
+    const radiation=clamp(normRand(rng,0.25+0.2*(1-atmosphere),0.2),0,1);
+    const moons=Math.max(0,Math.floor(normRand(rng,1.2,1.5)));
+    const habitability=clamp(0.35*(1-Math.abs(temp-0.55)) + 0.25*water + 0.2*atmosphere + 0.1*(1-radiation) + 0.1*(0.5+0.5*rng()),0,1) * lerp(0.8,1.15,(rng()<0.5?0.5:lerp(0.5,1.0,bias)));
+    this.name=`P${i}-${"ABCDE"[Math.floor(rng()*5)]}`;
+    this.mass=mass; this.water=water; this.temp=temp; this.atmosphere=atmosphere; this.metals=metals; this.volcanism=volcanism; this.radiation=radiation; this.moons=moons; this.orbit_au=lerp(0.2,4.0,orbit);
+    this.habitability=clamp(habitability,0,1);
+    this.has_life=false; this.biosphere_age=0; this.species=[];
+  }
+  abiogenesisChance(rng){const sweet_temp=1.0 - Math.abs(this.temp - 0.55)*2.0; const sweet_atm=1.0 - Math.abs(this.atmosphere - 0.6)*1.8; const sweet_water=Math.sqrt(this.water); const chem=0.4*this.volcanism + 0.3*this.metals + 0.3*randomUnit(rng); const shield=1.0 - 0.5*this.radiation; const base=clamp(0.15*sweet_temp + 0.2*sweet_atm + 0.3*sweet_water + 0.25*chem + 0.1*shield,0,1); const timescale = this.biosphere_age ? (1 - Math.exp(-this.biosphere_age/200000)) : 0.0; return clamp(this.habitability*0.3 + base*0.7,0,1) * (0.02 + 0.35*timescale)}
+}
+
+class Species{
+  constructor(planet, rng, seed){
+    const names=["Protos","Archaea","Ciliad","Mycon","Thalx","Yeve","Orbo","Kli"]; this.planet=planet; this.name=names[Math.floor(rng()*names.length)];
+    this.complexity=rng()*(0.2-0.05)+0.05; this.metabolism=rng()*0.6+0.1; this.lifespan=rng()*0.5+0.1; this.repro_rate=rng()*0.7+0.2; this.land_bias=rng(); this.tool_inclination=rng()*0.3; this.sociality=rng()*0.5; this.population=rng()*9900+100; this.niche=["microbial-mat","chemotroph","photosynth","planktonic"][Math.floor(rng()*4)];
+    this.alive=true; this.proto_culture=0; this.tech=0; this.polity_frag=0; this.history=[];
+  }
+  fitness(rng){const env=this.planet; const water_fit=(1-this.land_bias)*env.water + this.land_bias*(1-env.water*0.6); const temp_fit=1.0 - Math.abs(env.temp - lerp(0.25,0.7,this.metabolism))*1.2; const atm_fit=1.0 - 0.7*Math.abs(env.atmosphere - 0.5); const rad_pen=1.0 - 0.6*env.radiation; const coop=0.2 + 0.8*this.sociality; const comp=0.2 + 0.8*this.complexity; return clamp(0.25*water_fit + 0.2*temp_fit + 0.2*atm_fit + 0.15*rad_pen + 0.1*coop + 0.1*comp,0,1)}
+  maybeSpeciate(rng, rngSpice){ if (rng() > 0.02*(0.2 + this.population/1e6)) return null; const m=(x,s)=>clamp(x + normRand(rng,0,s + 0.15*rngSpice),0,1); const sp=new Species(this.planet, rng); sp.name=`${this.name.split(" ")[0]}-${String.fromCharCode(65+Math.floor(rng()*26))}${1+Math.floor(rng()*99)}`; sp.complexity=m(this.complexity,0.08); sp.metabolism=m(this.metabolism,0.12); sp.lifespan=m(this.lifespan,0.08); sp.repro_rate=m(this.repro_rate,0.10); sp.land_bias=m(this.land_bias,0.15); sp.tool_inclination=m(this.tool_inclination,0.1); sp.sociality=m(this.sociality,0.1); sp.population=Math.max(10, this.population*(0.02 + 0.18*rng())); sp.niche=["grazer","predator","scavenger","omnivore","filter-feeder","burrower","arboreal","littoral","pelagic","steppe"][Math.floor(rng()*10)]; return sp }
+  advanceCulture(rng, dtYears, events){ if (this.complexity>0.55 && this.tool_inclination>0.55 && this.sociality>0.55){ this.proto_culture=clamp(this.proto_culture + (0.001 + 0.02*this.sociality + 0.01*this.tool_inclination) * Math.log1p(dtYears/1000),0,1); if (this.proto_culture>0.15 && this.tech<0.05 && rng()<0.02){ events.push("first knapped flakes / simple tools"); this.tech=Math.max(this.tech,0.05)} const baseline=0.0001 + 0.0009*this.proto_culture; let spark=0; if (rng()<0.0015) spark+=rng()*(0.08-0.01)+0.01; if (rng()<0.0006) spark-=(rng()*(0.05-0.01)+0.01); const resource_bonus=0.02*this.planet.metals + 0.01*this.planet.volcanism; this.tech=clamp(this.tech + (baseline + spark + resource_bonus) * Math.log1p(dtYears/800),0,1); if (rng() < 0.0008 * Math.log1p(this.population/50000)){ this.polity_frag=Math.min(64, this.polity_frag + (1+Math.floor(rng()*3))) } } }
+}
+
+// --------------------------- Events ----------------------------------
+function worldEvents(rng, planet, years, log){ const r=rng(); const chance=0.0002*years*(1+planet.volcanism) + 0.00005*planet.moons + 0.00008*planet.radiation; if (r < chance){ const kind=chooseWeighted(rng,[ [2.0,"volcanic winter"],[1.2,"flood basalt epoch"],[1.5,"impact event"],[1.0,"snowball phase"],[0.8,"magnetic field weakening"],[0.7,"oxygenation pulse"],[0.9,"plate reconfiguration"] ]); switch(kind){ case "volcanic winter": planet.temp=clamp(planet.temp - (rng()*0.15+0.05),0,1); planet.atmosphere=jitter(rng,planet.atmosphere,0.03); log.push(`[PLANET] Volcanic winter chills climate.`); break; case "flood basalt epoch": planet.temp=clamp(planet.temp + (rng()*0.10+0.05),0,1); planet.volcanism=clamp(planet.volcanism + (rng()*0.10+0.05),0,1); log.push(`[PLANET] Flood basalts heat up atmosphere.`); break; case "impact event": planet.temp=clamp(planet.temp - (rng()*0.18+0.02),0,1); planet.radiation=clamp(planet.radiation + (rng()*0.10+0.02),0,1); log.push(`[PLANET] Major impact reshapes ecology.`); break; case "snowball phase": planet.temp=clamp(planet.temp - (rng()*0.2+0.2),0,1); log.push(`[PLANET] Global glaciation (‘snowball’).`); break; case "magnetic field weakening": planet.radiation=clamp(planet.radiation + (rng()*0.15+0.1),0,1); log.push(`[PLANET] Magnetic shielding weakens.`); break; case "oxygenation pulse": planet.atmosphere=clamp(planet.atmosphere + (rng()*0.1+0.05),0,1); log.push(`[PLANET] Atmospheric oxygen surges.`); break; case "plate reconfiguration": planet.water=clamp(planet.water + (rng()*0.2-0.1),0,1); log.push(`[PLANET] Continents drift; coasts and basins shift.`); break; } } }
+
+function culturalEvents(rng, sp, years, log){ if (sp.tech<=0 || sp.population<1000) return; const base=0.0006 * Math.log1p(sp.population/500); if (rng() < base){ const kind=chooseWeighted(rng,[ [1.2,"warfare"],[1.0,"famine"],[1.0,"plague"],[0.9,"religious synthesis"],[0.9,"trade boom"],[0.8,"political centralization"],[0.7,"scientific revolution"],[0.5,"cultural renaissance"],[0.4,"industrialization"],[0.25,"information age"] ]); switch(kind){ case "warfare":{ const loss=rng()*0.23+0.02; sp.population*=(1-loss); sp.polity_frag=Math.min(128, sp.polity_frag + Math.floor(rng()*5)); sp.tech=clamp(sp.tech + (rng()*0.05-0.02),0,1); log.push("[CIV] Warfare reshapes borders and knowledge."); break;} case "famine": sp.population*=(1-(rng()*0.25+0.05)); sp.tech=clamp(sp.tech - (rng()*0.02),0,1); log.push("[CIV] Famine stresses social order."); break; case "plague": sp.population*=(1-(rng()*0.35+0.05)); log.push("[CIV] Plague sweeps through populations."); break; case "religious synthesis": sp.proto_culture=clamp(sp.proto_culture + (rng()*0.06+0.02),0,1); sp.polity_frag=Math.max(0, sp.polity_frag - Math.floor(rng()*3)); log.push("[CIV] Syncretic belief systems spread."); break; case "trade boom": sp.tech=clamp(sp.tech + (rng()*0.05+0.01),0,1); sp.population*=(1+(rng()*0.08+0.02)); log.push("[CIV] Trade networks accelerate innovation."); break; case "political centralization": sp.polity_frag=Math.max(0, sp.polity_frag - (1+Math.floor(rng()*4))); log.push("[CIV] Central states consolidate power."); break; case "scientific revolution": sp.tech=clamp(sp.tech + (rng()*0.10+0.05),0,1); log.push("[CIV] Paradigm shifts spark breakthroughs."); break; case "cultural renaissance": sp.proto_culture=clamp(sp.proto_culture + (rng()*0.07+0.05),0,1); log.push("[CIV] Arts & letters flourish."); break; case "industrialization": if (sp.tech>0.35){ sp.tech=clamp(sp.tech + (rng()*0.14+0.06),0,1); sp.population*=(1+(rng()*0.20+0.05)); log.push("[CIV] Industrialization takes hold."); } break; case "information age": if (sp.tech>0.6){ sp.tech=clamp(sp.tech + (rng()*0.18+0.07),0,1); sp.polity_frag=Math.max(0, sp.polity_frag - Math.floor(rng()*6)); log.push("[CIV] Networks transform society."); } break; } } }
+
+// --------------------------- Simulator --------------------------------
+class Simulator{
+  constructor(seed){ this.setSeed(seed); this.turnMs=5000; this.auto=true; this.interval=null; this.maxSpecies=500; this.log=[]; this.turn=0; this.firstSpaceTurn=null;}
+  setSeed(seed){ this.seed=(seed!==undefined && seed!==null && seed!=='') ? Number(seed)>>>0 : autoSeed(); this.rng=mulberry32(this.seed)}
+  init(){ const rng=this.rng; const habitability_bias=0.15*rng(); const nplanets=8+Math.floor(rng()*17); const yearsPerTurn = Math.floor(1000 + rng()*49000); this.dtYears=yearsPerTurn; this.systemName=randName(rng); this.planets=Array.from({length:nplanets}, (_,i)=>new Planet(rng,i+1,habitability_bias)).sort((a,b)=>a.orbit_au-b.orbit_au); this.focus=this.planets.reduce((a,b)=>a.habitability>b.habitability?a:b); this.log=[`=== Star System ${this.systemName} (seed=${this.seed}) ===`, `${nplanets} planets; Δt ≈ ${yearsPerTurn.toLocaleString()} years/turn`, "", `Focus planet ${this.focus.name} — orbit ${this.focus.orbit_au.toFixed(2)} AU`]; this.turn=0; this.firstSpaceTurn=null; this.rngSpice=this.rng(); this.updateUI(true) }
+  step(){ const rng=this.rng, dt=this.dtYears, focus=this.focus; this.turn++; worldEvents(rng, focus, dt, this.log); if (!focus.has_life){ focus.biosphere_age+=dt; if (rng() < focus.abiogenesisChance(rng)){ focus.has_life=true; const n=3+Math.floor(rng()*6); for (let i=0;i<n;i++){ focus.species.push(new Species(focus, rng)) } this.log.push("[LIFE] Abiogenesis! Simple life takes hold."); } }
+    else { focus.biosphere_age+=dt }
+    const newSpecies=[]; for (const sp of focus.species){ if (!sp.alive) continue; const f=clamp(sp.fitness(rng),0,1); const growth=(sp.repro_rate*(0.3+0.7*f) - (0.1+0.2*sp.metabolism)) * Math.log1p(dt/1000); const K = 50000 + 2000000 * (0.2 + 0.6*focus.water + 0.3*focus.atmosphere); sp.population=Math.max(0, sp.population * (1+growth) * (1 - sp.population/(K+1e-6))); if (sp.population < 1 && rng()<0.5){ sp.alive=false; continue } sp.complexity=clamp(sp.complexity + normRand(rng,0,0.002) * Math.log1p(dt/2000),0,1); sp.tool_inclination = clamp(jitter(rng,sp.tool_inclination,0.01),0,1); sp.sociality = clamp(jitter(rng,sp.sociality,0.01),0,1); const bud=sp.maybeSpeciate(rng,this.rngSpice); if (bud) newSpecies.push(bud); sp.advanceCulture(rng, dt, this.log); culturalEvents(rng, sp, dt, this.log); }
+    if (newSpecies.length){ focus.species.push(...newSpecies); if (focus.species.length>this.maxSpecies){ focus.species.sort((a,b)=> (a.population*a.fitness(this.rng)) - (b.population*b.fitness(this.rng))); const culled = focus.species.length - this.maxSpecies; for(let i=0;i<culled;i++){ focus.species[i].alive=false } focus.species = focus.species.filter(s=>s.alive); this.log.push(`[ECO] Biodiversity boom; ${culled} lineages fade.`) } }
+    // proto-sapients & milestones
+    const proto = focus.species.filter(s=>s.alive && s.proto_culture>0.2 && s.tool_inclination>0.5 && s.sociality>0.5);
+    if (proto.length){ const lead=proto.reduce((a,b)=> (a.tech>a.tech? a : (b.tech>a.tech?b:(a.population>b.population?a:b)))); const milestones=[[0.02,"Oldowan-like stone culture emerges."],[0.08,"Fire control and camps."],[0.15,"Spears, sewing, proto-myths."],[0.22,"Horticulture & villages."],[0.28,"Bronze-like metallurgy."],[0.35,"Wheels, writing, city-states."],[0.45,"Empires, philosophy, stirrups."],[0.55,"Scientific method dawn."],[0.65,"Industrial energy & rail."],[0.75,"Electronics & rocketry."],[0.88,"Networks & automation."],[0.96,"Offworld capability & megastructures."]];
+      for(const [thr,msg] of milestones){ const key=`@${thr.toFixed(2)}`; if (lead.tech>=thr && !lead.history.includes(key)){ lead.history.push(key); this.log.push(`[MILESTONE] ${msg}`) } }
+      if (lead.tech>=0.75 && this.firstSpaceTurn===null) this.firstSpaceTurn=this.turn; }
+    this.updateUI(false);
+  }
+  start(){ if (this.interval) return; const tick=()=>{ if (!this.auto){ this.pause(); return } this.step() }; this.interval=setInterval(tick, this.turnMs) }
+  pause(){ if (this.interval){ clearInterval(this.interval); this.interval=null } }
+  updateUI(initial){ // labels
+    document.getElementById('turnLabel').textContent=`Turn ${this.turn}`;
+    document.getElementById('ageLabel').textContent = `Age ≈ ${(this.focus.biosphere_age/1e6).toFixed(2)} Myr`;
+    // system
+    const sysKV=document.getElementById('sysKV'); sysKV.innerHTML = `
+      <b>Star System</b><div>${this.systemName}</div>
+      <b>Planets</b><div>${this.planets.length}</div>
+      <b>Δt (years/turn)</b><div class="mono">${this.dtYears.toLocaleString()}</div>
+    `;
+    const hb=this.focus.habitability; document.getElementById('habitBar').style.width = `${Math.floor(hb*100)}%`;
+    const fKV=document.getElementById('focusKV'); const p=this.focus; fKV.innerHTML = `
+      <b>Focus Planet</b><div>${p.name}</div>
+      <b>Orbit</b><div>${p.orbit_au.toFixed(2)} AU</div>
+      <b>Water</b><div>${p.water.toFixed(2)}</div>
+      <b>Temp</b><div>${p.temp.toFixed(2)}</div>
+      <b>Atm</b><div>${p.atmosphere.toFixed(2)}</div>
+      <b>Volcanism</b><div>${p.volcanism.toFixed(2)}</div>
+      <b>Radiation</b><div>${p.radiation.toFixed(2)}</div>
+      <b>Life</b><div>${p.has_life?"Yes":"No"}</div>
+      <b>Species (alive)</b><div>${p.species.filter(s=>s.alive).length}</div>
+    `;
+    // civ panel
+    const alive=p.species.filter(s=>s.alive); const sapiens=alive.filter(s=>s.proto_culture>0.2);
+    if (sapiens.length){ const lead=sapiens.reduce((a,b)=> ( (b.tech>a.tech) || (b.tech===a.tech && b.population>a.population) ? b : a )); const stages=["stone","bronze","iron","renaissance","industrial","electronic","space","post‑space"]; const idx=Math.min(Math.floor(lead.tech*stages.length),stages.length-1); document.getElementById('civStage').textContent=stages[idx]; document.getElementById('civKV').innerHTML = `
+        <div class="kv">
+          <b>Lineage</b><div>${lead.name}</div>
+          <b>Population</b><div>${Math.floor(lead.population).toLocaleString()}</div>
+          <b>Tech</b><div>${lead.tech.toFixed(2)}</div>
+          <b>Culture</b><div>${lead.proto_culture.toFixed(2)}</div>
+          <b>Polities</b><div>~${lead.polity_frag+1}</div>
+        </div>`;
+    } else { document.getElementById('civStage').textContent='—'; document.getElementById('civKV').innerHTML='<span class="muted">No stable tool‑using civilization yet; evolution continues…</span>' }
+    // log
+    const logDiv=document.getElementById('log'); if (initial){ logDiv.innerHTML='' }
+    const slice=this.log.slice(-120); // keep recent
+    logDiv.innerHTML = slice.map(s=>`<p>${s.replace(/</g,'&lt;')}</p>`).join(''); logDiv.scrollTop = logDiv.scrollHeight;
+  }
+}
+
+// --------------------------- Wire up UI -------------------------------
+const sim=new Simulator(); sim.init();
+const btnStart=document.getElementById('btnStart'); const btnPause=document.getElementById('btnPause'); const btnStep=document.getElementById('btnStep'); const btnReset=document.getElementById('btnReset'); const seedInput=document.getElementById('seedInput'); const autoChk=document.getElementById('autoChk');
+btnStart.onclick=()=>{ sim.auto=true; autoChk.checked=true; sim.start() }
+btnPause.onclick=()=>{ sim.pause() }
+btnStep.onclick=()=>{ sim.pause(); sim.auto=false; sim.step() }
+btnReset.onclick=()=>{ sim.pause(); sim.setSeed(seedInput.value); sim.init() }
+autoChk.onchange=(e)=>{ sim.auto = !!e.target.checked; if (sim.auto && !sim.interval) sim.start(); }
+
+</script>
+</body>
+</html>
